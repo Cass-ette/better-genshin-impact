@@ -1,0 +1,203 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+
+namespace BetterGenshinImpact.Service.Remote
+{
+    /// <summary>
+    /// BetterGI 远程控制 HTTP API 服务
+    /// 提供本地 HTTP 接口供远程控制
+    /// </summary>
+    public class RemoteControlService
+    {
+        private HttpListener? _listener;
+        private bool _isRunning;
+        private readonly string _apiToken;
+        private readonly int _port;
+
+        public RemoteControlService(int port = 8080, string? apiToken = null)
+        {
+            _port = port;
+            _apiToken = apiToken ?? GenerateToken();
+        }
+
+        public void Start()
+        {
+            if (_isRunning) return;
+
+            _listener = new HttpListener();
+            _listener.Prefixes.Add($"http://127.0.0.1:{_port}/");
+            _listener.Start();
+            _isRunning = true;
+
+            Task.Run(async () => await HandleRequests());
+            Console.WriteLine($"[RemoteControl] API Server started on port {_port}");
+        }
+
+        public void Stop()
+        {
+            if (!_isRunning) return;
+
+            _listener?.Stop();
+            _listener?.Close();
+            _isRunning = false;
+            Console.WriteLine("[RemoteControl] API Server stopped");
+        }
+
+        private async Task HandleRequests()
+        {
+            while (_isRunning)
+            {
+                try
+                {
+                    var context = await _listener!.GetContextAsync();
+                    _ = Task.Run(() => ProcessRequest(context));
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[RemoteControl] Error: {ex.Message}");
+                }
+            }
+        }
+
+        private async Task ProcessRequest(HttpListenerContext context)
+        {
+            var request = context.Request;
+            var response = context.Response;
+
+            // CORS headers
+            response.AddHeader("Access-Control-Allow-Origin", "*");
+            response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+            response.AddHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+            if (request.HttpMethod == "OPTIONS")
+            {
+                response.StatusCode = 200;
+                response.Close();
+                return;
+            }
+
+            // 验证 Token
+            if (!ValidateToken(request))
+            {
+                await SendResponse(response, 401, new { error = "Unauthorized" });
+                return;
+            }
+
+            try
+            {
+                var path = request.Url?.AbsolutePath ?? "";
+                var method = request.HttpMethod;
+
+                object responseData = path switch
+                {
+                    "/api/status" when method == "GET" => await GetStatus(),
+                    "/api/task/start" when method == "POST" => await StartTask(request),
+                    "/api/task/stop" when method == "POST" => await StopTask(),
+                    "/api/task/list" when method == "GET" => await GetTaskList(),
+                    "/api/screenshot" when method == "GET" => await GetScreenshot(),
+                    _ => new { error = "Not Found" }
+                };
+
+                await SendResponse(response, 200, responseData);
+            }
+            catch (Exception ex)
+            {
+                await SendResponse(response, 500, new { error = ex.Message });
+            }
+        }
+
+        private bool ValidateToken(HttpListenerRequest request)
+        {
+            var authHeader = request.Headers["Authorization"];
+            if (string.IsNullOrEmpty(authHeader)) return false;
+
+            var token = authHeader.Replace("Bearer ", "");
+            return token == _apiToken;
+        }
+
+        private async Task SendResponse(HttpListenerResponse response, int statusCode, object data)
+        {
+            response.StatusCode = statusCode;
+            response.ContentType = "application/json; charset=utf-8";
+
+            var json = JsonSerializer.Serialize(data);
+            var buffer = Encoding.UTF8.GetBytes(json);
+
+            response.ContentLength64 = buffer.Length;
+            await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+            response.Close();
+        }
+
+        // API 端点实现
+
+        private async Task<object> GetStatus()
+        {
+            // TODO: 获取 BetterGI 实际状态
+            return new
+            {
+                status = "running",
+                version = "1.0.0-korean",
+                current_task = TaskContext.Instance?.Name ?? "idle",
+                uptime = DateTime.Now.ToString("o")
+            };
+        }
+
+        private async Task<object> StartTask(HttpListenerRequest request)
+        {
+            // TODO: 读取请求体并启动任务
+            using var reader = new StreamReader(request.InputStream, request.ContentEncoding);
+            var body = await reader.ReadToEndAsync();
+            var taskConfig = JsonSerializer.Deserialize<Dictionary<string, object>>(body);
+
+            // 调用 BetterGI 任务管理器启动任务
+            // TaskScheduler.Instance.Start(taskConfig);
+
+            return new { success = true, message = "Task started" };
+        }
+
+        private async Task<object> StopTask()
+        {
+            // TODO: 停止当前任务
+            // TaskScheduler.Instance.Stop();
+
+            return new { success = true, message = "Task stopped" };
+        }
+
+        private async Task<object> GetTaskList()
+        {
+            // TODO: 获取可用任务列表
+            return new
+            {
+                tasks = new[]
+                {
+                    new { id = "auto_domain", name = "自动秘境", name_ko = "자동 비경" },
+                    new { id = "auto_leyline", name = "自动地脉", name_ko = "자동 지맥" },
+                    new { id = "daily_commission", name = "每日委托", name_ko = "일일 의뢰" },
+                }
+            };
+        }
+
+        private async Task<object> GetScreenshot()
+        {
+            // TODO: 获取游戏截图
+            // var screenshot = CaptureService.Instance.CaptureScreen();
+            // var base64 = Convert.ToBase64String(screenshot);
+
+            return new
+            {
+                screenshot = "base64_image_data_here",
+                timestamp = DateTime.Now.ToString("o")
+            };
+        }
+
+        private string GenerateToken()
+        {
+            return Guid.NewGuid().ToString("N");
+        }
+    }
+}
