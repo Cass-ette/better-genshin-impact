@@ -292,6 +292,11 @@ public partial class AllConfig : ObservableObject
     /// </summary>
     public ChildSessionConfig ChildSessionConfig { get; set; } = new();
 
+    /// <summary>
+    /// 远程控制配置
+    /// </summary>
+    public RemoteControlConfig RemoteControlConfig { get; set; } = new();
+
     [JsonIgnore]
     public Action? OnAnyChangedAction { get; set; }
 
@@ -330,6 +335,7 @@ public partial class AllConfig : ObservableObject
         HardwareAccelerationConfig.PropertyChanged += OnAnyPropertyChanged;
         ChildSessionConfig.PropertyChanged += OnAnyPropertyChanged;
         SkillCdConfig.PropertyChanged += OnAnyPropertyChanged;
+        RemoteControlConfig.PropertyChanged += OnAnyPropertyChanged;
     }
 
     public void OnAnyPropertyChanged(object? sender, EventArgs args)

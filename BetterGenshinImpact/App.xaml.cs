@@ -153,6 +153,7 @@ public partial class App : Application
                 services.AddView<TaskSettingsPage, TaskSettingsPageViewModel>();
                 services.AddView<HotKeyPage, HotKeyPageViewModel>();
                 services.AddView<NotificationSettingsPage, NotificationSettingsPageViewModel>();
+                services.AddView<RemoteControlSettingsPage, RemoteControlSettingsPageViewModel>();
                 services.AddView<KeyMouseRecordPage, KeyMouseRecordPageViewModel>();
                 services.AddView<JsListPage, JsListViewModel>();
                 services.AddView<MapPathingPage, MapPathingViewModel>();
@@ -190,6 +191,8 @@ public partial class App : Application
                 services.AddSingleton<NotificationService>();
                 services.AddHostedService(sp => sp.GetRequiredService<NotificationService>());
                 services.AddSingleton<NotifierManager>();
+                services.AddSingleton<BetterGenshinImpact.Service.Remote.RemoteControlService>();
+                services.AddHostedService(sp => sp.GetRequiredService<BetterGenshinImpact.Service.Remote.RemoteControlService>());
                 services.AddSingleton<IScriptService, ScriptService>();
                 services.AddSingleton<IMusicScoreParser, MusicScoreParser>();
                 services.AddSingleton<IMusicStateStore, MusicStateStore>();
