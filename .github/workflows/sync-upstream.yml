@@ -1,0 +1,97 @@
+name: Sync with Upstream and Build Korean Version
+
+on:
+  schedule:
+    # 每天 UTC 00:00 自动检查更新 (北京时间 08:00)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/babalae/better-genshin-impact.git || true
+          git fetch upstream
+
+      - name: Sync main branch with upstream
+        run: |
+          git checkout main
+          git merge upstream/main --no-edit || echo "Merge conflict or no changes"
+
+      - name: Push changes
+        run: |
+          git push origin main || echo "Nothing to push"
+
+      - name: Merge main into Korean feature branch
+        run: |
+          git checkout feature/add-korean-language
+          git merge main --no-edit || echo "Merge conflict or no changes"
+          git push origin feature/add-korean-language || echo "Nothing to push"
+
+  build:
+    needs: sync
+    runs-on: windows-latest
+    if: success()
+
+    steps:
+      - name: Checkout Korean branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/add-korean-language
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build Release
+        run: dotnet build -c Release --no-restore
+
+      - name: Get version from tag
+        id: version
+        run: |
+          $version = git describe --tags --abbrev=0
+          if ([string]::IsNullOrEmpty($version)) {
+            $version = "v1.0.0-korean"
+          }
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Package Release
+        run: |
+          $outputPath = "BetterGenshinImpact\bin\x64\Release\net8.0-windows10.0.22621.0"
+          Compress-Archive -Path $outputPath\* -DestinationPath BetterGI-Korean-${{ steps.version.outputs.VERSION }}.zip
+        shell: pwsh
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: BetterGI-Korean-*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BetterGI-Korean-Build
+          path: BetterGenshinImpact\bin\x64\Release\net8.0-windows10.0.22621.0\
+          retention-days: 30
